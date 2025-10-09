@@ -1,0 +1,50 @@
+[project]
+name = "ai-task-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.69.0",
+    "pydantic>=2.12.0",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
+    "rich>=14.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.30.1",
+    "jupyter>=1.1.1",
+    "psutil>=7.1.0",
+]
+
+
+# ========== Ruff Configuration ==========
+[tool.ruff]
+line-length = 88
+
+# Target your Python version
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors (already default)
+    "F",   # Pyflakes (already default) 
+    "I",   # isort - import sorting
+    "UP",  # pyupgrade - modernize Python syntax
+    "B",   # flake8-bugbear - catch common bugs
+    "SIM", # flake8-simplify - suggest simpler code
+]
+unfixable = ["F401"]
+
+# Allow Ruff to fix issues automatically
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["weather-agent"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+

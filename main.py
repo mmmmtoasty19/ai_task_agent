@@ -36,6 +36,7 @@ def initialize_database():
         status TEXT NOT NULL,
         due_date TEXT,
         completed_date TEXT
+        )
         """)
 
     return conn
@@ -56,8 +57,38 @@ class Task(BaseModel):
     status: Literal["in_progress", "completed", "on_hold"] = Field(
         default="in_progress", description="Status of task"
     )
-    due_date: str | None = Field(description="Date for task completion")
-    completed_date: str | None = Field(description="Date of task completion")
+    due_date: str | None = Field(default=None, description="Date for task completion")
+    completed_date: str | None = Field(
+        default=None, description="Date of task completion"
+    )
+
+
+# ============================================================================
+# Basic Functions
+# ============================================================================
+
+
+# TODO Add error checking incase task can't be added
+def add_task(conn, task: Task):
+    """function to add new Task to the Database"""
+
+    cur = conn.cursor()
+
+    task_dict = task.model_dump()
+
+    cur.execute(
+        """INSERT INTO tasks (description, priority, status, due_date, completed_date)
+           VALUES (?, ?, ?, ?, ?)""",
+        (
+            task_dict["description"],
+            task_dict["priority"],
+            task_dict["status"],
+            task_dict["due_date"],
+            task_dict["completed_date"],
+        ),
+    )
+
+    conn.commit()
 
 
 # ============================================================================

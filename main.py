@@ -84,7 +84,7 @@ class ToolResult(BaseModel):
 # ============================================================================
 
 
-# TODO Add error checking incase task can't be added
+# TODO Add error checking in case task can't be added
 def add_task(conn, task: Task):
     """function to add new Task to the Database"""
 

@@ -198,7 +198,7 @@ def execute_list_task(conn, tool_input: dict) -> ToolResult:
         
         return ToolResult(success=True, data=tasks_data)
     except Exception as e:
-        return ToolResult(success=False, error=f"Failed to add task: {str(e)}")
+        return ToolResult(success=False, error=f"Failed to list task: {str(e)}")
 
 
 # ============================================================================
@@ -317,10 +317,10 @@ def run_agent(conn, user_message: str) -> str:
             tools=TOOLS,
             messages=messages,
             system=(
-                "You are a helpful task management assistant."
-                f"The current date is {current_date}"
+                "You are a helpful task management assistant. "
+                f"The current date is {current_date} "
                 "Help users manage their tasks by adding, viewing, and organizing them."
-                "Be friendly and conversational."
+                " Be friendly and conversational. "
             ),
         )
 

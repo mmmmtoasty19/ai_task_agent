@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -184,6 +185,20 @@ def execute_add_task(conn, tool_input: dict) -> ToolResult:
         )
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to add task: {str(e)}")
+    
+def execute_list_task(conn, tool_input: dict) -> ToolResult:
+    try:
+         # Extract filters if they exist, otherwise None (list all)
+        filters = tool_input.get("filters") or None
+        
+        tasks = list_tasks(conn, filters=filters)
+        
+        # Convert Task objects to dicts for JSON
+        tasks_data = [task.model_dump() for task in tasks]
+        
+        return ToolResult(success=True, data=tasks_data)
+    except Exception as e:
+        return ToolResult(success=False, error=f"Failed to add task: {str(e)}")
 
 
 # ============================================================================
@@ -229,10 +244,42 @@ TOOLS = [
             },
             "required": ["description"],
         },
+    },
+    {
+    "name": "list_tasks",
+    "description": "Lists tasks from the task manager. Can list all tasks or filter by specific criteria like priority, status, or due date.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "filters": {
+                "type": "object",
+                "description": "Optional filters to apply. Leave empty to list all tasks.",
+                "properties": {
+                    "priority": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high"],
+                        "description": "Filter by task priority"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["in_progress", "completed", "on_hold"],
+                        "description": "Filter by task status"
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "description": "Filter by due date (format: YYYY-MM-DD)"
+                    }
+                }
+            }
+        }
     }
+}
 ]
 
-TOOL_MAP = {"add_task": execute_add_task}
+TOOL_MAP = {
+    "add_task": execute_add_task,
+    "list_tasks": execute_list_task
+    }
 
 
 # ============================================================================
@@ -258,6 +305,7 @@ def run_agent(conn, user_message: str) -> str:
         Claudes's final response as a string
     """
     messages = [{"role": "user", "content": user_message}]
+    current_date = datetime.now().strftime("%Y-%m-%d")
 
     for iteration in range(MAX_ITERATIONS):
         console.print(f"\n[dim]--- Iteration {iteration + 1} ---[/dim]")
@@ -270,6 +318,7 @@ def run_agent(conn, user_message: str) -> str:
             messages=messages,
             system=(
                 "You are a helpful task management assistant."
+                f"The current date is {current_date}"
                 "Help users manage their tasks by adding, viewing, and organizing them."
                 "Be friendly and conversational."
             ),

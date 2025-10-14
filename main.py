@@ -177,12 +177,50 @@ def update_task(conn, task_id: int, updates: dict):
     conn.commit()
 
 
-def complete_task():
-    pass
+def complete_task(conn, task_id: int):
+    """Given a task ID, mark it as completed with the current date
+
+    Args:
+        conn (_type_): Database connection
+        task_id (int): ID of task to mark as completed
+    """
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    update_task(conn, task_id, {"status": "completed", "completed_date": current_date})
 
 
 def delete_task():
     pass
+
+
+def find_task(conn, search_term: str = None, filters: dict = None):
+    """Find tasks by partial description match or other criteria
+
+    Args:
+        conn: Database connection
+        search_term: Text to search for in description (case-insensitive)
+        filters: Additional exact-match filters (priority, status, etc.)
+
+    Returns:
+        List of matching Task objects
+    """
+    cur = conn.cursor()
+    query = "SELECT * FROM tasks WHERE 1=1"
+    params = []
+
+    if search_term:
+        query += " AND description LIKE ?"
+        params.append(f"%{search_term}%")
+
+    if filters:
+        allowed_fields = {"priority", "status", "due_date", "completed_date"}
+        for field, value in filters.items():
+            if field in allowed_fields:
+                query += f" AND {field} = ?"
+                params.append(value)
+
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+    return [tuple_to_task(row) for row in rows]
 
 
 # ============================================================================
@@ -242,6 +280,55 @@ def execute_list_task(conn, tool_input: dict) -> ToolResult:
         return ToolResult(success=False, error=f"Failed to list task: {str(e)}")
 
 
+def execute_update_task(conn, tool_input: dict) -> ToolResult:
+    try:
+        task_id = tool_input["task_id"]
+        updates = tool_input.get("updates", {})
+
+        if not updates:
+            return ToolResult(success=False, error="No updates provided")
+
+        # TODO add date validation (need to add function)
+
+        update_task(conn, task_id, updates)
+        return ToolResult(success=True, data=f"Task {task_id} updated successfully")
+
+    except Exception as e:
+        return ToolResult(success=False, error=f"Failed to update task: {str(e)}")
+
+
+def execute_complete_task():
+    pass
+
+
+def execute_delete_task():
+    pass
+
+
+def execute_find_task(conn, tool_input: dict) -> ToolResult:
+    """Wrapper to execute find_task"""
+    try:
+        search_term = tool_input.get("search_term")
+        filters = tool_input.get("filters")
+
+        if not search_term and not filters:
+            return ToolResult(success=False, error="Provide search_term or filters")
+
+        tasks = find_task(conn, search_term=search_term, filters=filters)
+
+        if not tasks:
+            return ToolResult(
+                success=True,
+                data={"tasks": [], "message": "No tasks found matching criteria"},
+            )
+
+        tasks_data = [task.model_dump() for task in tasks]
+        return ToolResult(success=True, data={"tasks": tasks_data, "count": len(tasks)})
+
+    except Exception as e:
+        return ToolResult(success=False, error=f"Failed to find task: {str(e)}")
+
+
 # ============================================================================
 # Tools
 # ============================================================================
@@ -288,13 +375,17 @@ TOOLS = [
     },
     {
         "name": "list_tasks",
-        "description": "Lists tasks from the task manager. Can list all tasks or filter by specific criteria like priority, status, or due date.",
+        "description": (
+            "Lists tasks from the task manager."
+            "Can list all tasks or filter by specific criteria"
+            "like priority, status, or due date."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "filters": {
                     "type": "object",
-                    "description": "Optional filters to apply. Leave empty to list all tasks.",
+                    "description": "Optional filters to apply. Empty to list all.",
                     "properties": {
                         "priority": {
                             "type": "string",
@@ -315,9 +406,85 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "update_task",
+        "description": (
+            "Updates an existing task's properties. "
+            "Can update description, priority, status, or dates. "
+            "Only provide the fields you want to change."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "integer",
+                    "description": "ID of the task to update",
+                },
+                "updates": {
+                    "type": "object",
+                    "description": "Fields to update",
+                    "properties": {
+                        "description": {"type": "string"},
+                        "priority": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["in_progress", "completed", "on_hold"],
+                        },
+                        "due_date": {"type": "string"},
+                        "completed_date": {"type": "string"},
+                    },
+                },
+            },
+            "required": ["task_id", "updates"],
+        },
+    },
+    {
+        "name": "find_task",
+        "description": (
+            "Search for tasks by description or other properties. "
+            "Use this to find task IDs when the user refers to tasks by their content "
+            "(e.g., 'my grocery task', 'the meeting task'). "
+            "Returns all matching tasks with their IDs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search_term": {
+                    "type": "string",
+                    "description": (
+                        "Text to search for in task description"
+                        "(partial match, case-insensitive)"
+                    ),
+                },
+                "filters": {
+                    "type": "object",
+                    "description": "Additional filters to narrow results",
+                    "properties": {
+                        "priority": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["in_progress", "completed", "on_hold"],
+                        },
+                        "due_date": {"type": "string"},
+                    },
+                },
+            },
+        },
+    },
 ]
 
-TOOL_MAP = {"add_task": execute_add_task, "list_tasks": execute_list_task}
+TOOL_MAP = {
+    "add_task": execute_add_task,
+    "list_tasks": execute_list_task,
+    "update_task": execute_update_task,
+    "find_task": execute_find_task,
+}
 
 
 # ============================================================================
@@ -359,6 +526,13 @@ def run_agent(conn, user_message: str) -> str:
                 f"The current date is {current_date} "
                 "Help users manage their tasks by adding, viewing, and organizing them."
                 " Be friendly and conversational. "
+                "IMPORTANT: When users refer to tasks by description"
+                "(e.g., 'complete my grocery task'), "
+                "first use find_task or list_tasks to locate the task and get its ID. "
+                "If multiple tasks match, "
+                "show them to the user and ask which one they meant. "
+                "Then use the ID for update_task, complete_task, "
+                "or delete_task operations."
             ),
         )
 

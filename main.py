@@ -129,8 +129,8 @@ def list_tasks(conn, filters: dict = None):
         invalid = [k for k in filters if k not in allowed_fields]
         if invalid:
             raise ValueError(
-                    f"Invalid filter keys: {invalid}. "
-                    f"Allowed keys: {sorted(allowed_fields)}"
+                f"Invalid filter keys: {invalid}. "
+                f"Allowed keys: {sorted(allowed_fields)}"
             )
 
         conditions = []
@@ -143,6 +143,46 @@ def list_tasks(conn, filters: dict = None):
     cur.execute(query, tuple(params))
     rows = cur.fetchall()
     return [tuple_to_task(row) for row in rows]
+
+
+def update_task(conn, task_id: int, updates: dict):
+    """Update fields of a task in the database
+
+    Args:
+        conn (_type_): Database connection
+        task_id (int): ID of task to update
+        updates (dict): Dict of fields to update with new values
+
+    Raises:
+        ValueError: If invalid fields are provided in updates
+        ValueError: ID of task does not exist
+    """
+    cur = conn.cursor()
+
+    allowed_fields = {"description", "priority", "status", "due_date", "completed_date"}
+    invalid = [k for k in updates if k not in allowed_fields]
+    if invalid:
+        raise ValueError(f"Invalid update fields: {invalid}")
+
+    cur.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
+    if not cur.fetchone():
+        raise ValueError(f"Task with id {task_id} does not exist.")
+
+    # Build Update Query
+    set_clauses = [f"{field} = ?" for field in updates]
+    query = f"UPDATE tasks SET {', '.join(set_clauses)} WHERE id = ?"
+    params = list(updates.values()) + [task_id]
+
+    cur.execute(query, tuple(params))
+    conn.commit()
+
+
+def complete_task():
+    pass
+
+
+def delete_task():
+    pass
 
 
 # ============================================================================
@@ -185,17 +225,18 @@ def execute_add_task(conn, tool_input: dict) -> ToolResult:
         )
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to add task: {str(e)}")
-    
+
+
 def execute_list_task(conn, tool_input: dict) -> ToolResult:
     try:
-         # Extract filters if they exist, otherwise None (list all)
+        # Extract filters if they exist, otherwise None (list all)
         filters = tool_input.get("filters") or None
-        
+
         tasks = list_tasks(conn, filters=filters)
-        
+
         # Convert Task objects to dicts for JSON
         tasks_data = [task.model_dump() for task in tasks]
-        
+
         return ToolResult(success=True, data=tasks_data)
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to list task: {str(e)}")
@@ -246,40 +287,37 @@ TOOLS = [
         },
     },
     {
-    "name": "list_tasks",
-    "description": "Lists tasks from the task manager. Can list all tasks or filter by specific criteria like priority, status, or due date.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "filters": {
-                "type": "object",
-                "description": "Optional filters to apply. Leave empty to list all tasks.",
-                "properties": {
-                    "priority": {
-                        "type": "string",
-                        "enum": ["low", "medium", "high"],
-                        "description": "Filter by task priority"
+        "name": "list_tasks",
+        "description": "Lists tasks from the task manager. Can list all tasks or filter by specific criteria like priority, status, or due date.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filters": {
+                    "type": "object",
+                    "description": "Optional filters to apply. Leave empty to list all tasks.",
+                    "properties": {
+                        "priority": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                            "description": "Filter by task priority",
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["in_progress", "completed", "on_hold"],
+                            "description": "Filter by task status",
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "description": "Filter by due date (format: YYYY-MM-DD)",
+                        },
                     },
-                    "status": {
-                        "type": "string",
-                        "enum": ["in_progress", "completed", "on_hold"],
-                        "description": "Filter by task status"
-                    },
-                    "due_date": {
-                        "type": "string",
-                        "description": "Filter by due date (format: YYYY-MM-DD)"
-                    }
                 }
-            }
-        }
-    }
-}
+            },
+        },
+    },
 ]
 
-TOOL_MAP = {
-    "add_task": execute_add_task,
-    "list_tasks": execute_list_task
-    }
+TOOL_MAP = {"add_task": execute_add_task, "list_tasks": execute_list_task}
 
 
 # ============================================================================

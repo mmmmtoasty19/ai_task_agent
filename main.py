@@ -501,13 +501,13 @@ def process_tool_call(conn, tool_name: str, tool_input: dict) -> ToolResult:
 
 def run_agent(conn, user_message: str) -> str:
     """
-    Run the agentic loop: send message to claude, process tool calls, return response.
+    Run the agentic loop: send message to Claude, process tool calls, return response.
 
     Args:
         user_message: Users input query
 
     Returns:
-        Claudes's final response as a string
+        Claude's final response as a string
     """
     messages = [{"role": "user", "content": user_message}]
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -515,77 +515,84 @@ def run_agent(conn, user_message: str) -> str:
     for iteration in range(MAX_ITERATIONS):
         console.print(f"\n[dim]--- Iteration {iteration + 1} ---[/dim]")
 
-        # Call Claude API
-        response = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=4096,
-            tools=TOOLS,
-            messages=messages,
-            system=(
-                "You are a helpful task management assistant. "
-                f"The current date is {current_date} "
-                "Help users manage their tasks by adding, viewing, and organizing them."
-                " Be friendly and conversational. "
-                "IMPORTANT: When users refer to tasks by description"
-                "(e.g., 'complete my grocery task'), "
-                "first use find_task or list_tasks to locate the task and get its ID. "
-                "If multiple tasks match, "
-                "show them to the user and ask which one they meant. "
-                "Then use the ID for update_task, complete_task, "
-                "or delete_task operations."
-            ),
-        )
+        try:
+            # Call Claude API
+            response = client.messages.create(
+                model=MODEL_NAME,
+                max_tokens=4096,
+                tools=TOOLS,
+                messages=messages,
+                system=(
+                    "You are a helpful task management assistant. "
+                    f"The current date is {current_date}. "
+                    "Help users manage their tasks by adding, viewing, and organizing them. "
+                    "Be friendly and conversational. "
+                    "IMPORTANT: When users refer to tasks by description "
+                    "(e.g., 'complete my grocery task'), "
+                    "first use find_task or list_tasks to locate the task and get its ID. "
+                    "If multiple tasks match, "
+                    "show them to the user and ask which one they meant. "
+                    "Then use the ID for update_task, complete_task, "
+                    "or delete_task operations."
+                ),
+            )
 
-        # TODO This is for Debugging, Can remove later
-        console.print(f"[dim]Stop reason: {response.stop_reason}[/dim]")
+            # TODO This is for debugging during testing to see what tools are being used
+            console.print(f"[dim]Stop reason: {response.stop_reason}[/dim]")
 
-        # Check is Claude needs a tool
-        if response.stop_reason == "tool_use":
-            assistant_message = {"role": "assistant", "content": response.content}
-            messages.append(assistant_message)
+            # Check if Claude needs a tool
+            if response.stop_reason == "tool_use":
+                assistant_message = {"role": "assistant", "content": response.content}
+                messages.append(assistant_message)
 
-            tool_results = []
+                tool_results = []
 
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_name = block.name
-                    tool_input = block.input
+                for block in response.content:
+                    if block.type == "tool_use":
+                        tool_name = block.name
+                        tool_input = block.input
 
-                    console.print(
-                        f"[yellow] Calling tool: {tool_name}"
-                        f"({json.dumps(tool_input, indent=2)})[/yellow]"
-                    )
+                        console.print(
+                            f"[yellow]Calling tool: {tool_name} "
+                            f"({json.dumps(tool_input, indent=2)})[/yellow]"
+                        )
 
-                    result = process_tool_call(conn, tool_name, tool_input)
+                        result = process_tool_call(conn, tool_name, tool_input)
 
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": json.dumps(
-                                {
-                                    "success": result.success,
-                                    "data": result.data,
-                                    "error": result.error,
-                                }
-                            ),
-                        }
-                    )
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": json.dumps(
+                                    {
+                                        "success": result.success,
+                                        "data": result.data,
+                                        "error": result.error,
+                                    }
+                                ),
+                            }
+                        )
 
-            messages.append({"role": "user", "content": tool_results})
+                messages.append({"role": "user", "content": tool_results})
 
-            # Continue the loop to get Claudes next response
-        elif response.stop_reason == "end_turn":
-            # Claude finished the loop and provided a response
-            final_response = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    final_response += block.text
+                # Continue the loop to get Claude's next response
+                continue
 
-            return final_response
+            elif response.stop_reason == "end_turn":
+                # Claude finished and provided a response
+                final_response = ""
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        final_response += block.text
 
-        else:
-            return f"Unexpected stop reason: {response.stop_reason}"
+                return final_response
+
+            else:
+                return f"Unexpected stop reason: {response.stop_reason}"
+
+        except Exception as e:
+            console.print(f"[red]Error calling Claude: {str(e)}[/red]")
+            return f"Error: {str(e)}"
 
     return "Maximum iterations reached. Please try again with a more specific query"
 
@@ -596,9 +603,16 @@ def run_agent(conn, user_message: str) -> str:
 
 
 def main():
+    # Check if Claude API key is set
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        console.print("[red]✗ ANTHROPIC_API_KEY not found in environment[/red]")
+        console.print("[yellow]Add it to your .env file[/yellow]")
+        return
+
     conn = initialize_database()
     try:
         console.print("[bold green]Task Manager Agent Started! [/bold green]")
+        console.print(f"[dim]Using Model: {MODEL_NAME}[/dim]")
         console.print("Type 'exit' or 'quit to end.\n")
 
         while True:

@@ -613,7 +613,7 @@ def main():
     try:
         console.print("[bold green]Task Manager Agent Started! [/bold green]")
         console.print(f"[dim]Using Model: {MODEL_NAME}[/dim]")
-        console.print("Type 'exit' or 'quit to end.\n")
+        console.print("Type 'exit' or 'quit' to end.\n")
 
         while True:
             user_input = input("You: ")
